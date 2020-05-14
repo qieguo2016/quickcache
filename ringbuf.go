@@ -21,7 +21,7 @@ func newRingBuf(size int) *ringBuf {
 	return &rb
 }
 
-func (r *ringBuf) Write(val []byte, offset int64) error {
+func (r *ringBuf) Write(val []byte) error {
 	if len(p) > len(rb.data) {
 		err = ErrOutOfRange
 		return
@@ -55,10 +55,14 @@ func (r *ringBuf) ReadAt(ret []byte, offset int64) error {
 }
 
 
-func (r *ringBuf) Evacuate() {
+func (r *ringBuf) Evacuate(offset, length int64) {
 
 }
 
 func (r *ringBuf) EqualAt(val []byte, offset int64) bool {
 
+}
+
+func (r *ringBuf) CheckSpace(size int) bool {
+	return len(r.data) - int(r.end - r.begin) >= size
 }
