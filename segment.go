@@ -1,18 +1,8 @@
 package quickcache
 
 import (
-	"errors"
 	"unsafe"
 )
-
-const (
-	bucketCount     = 256
-	entryHeaderSize = 16 // header的长度是128bit，16byte
-)
-
-var ErrLargeKey = errors.New("The key is larger than 65535")
-var ErrLargeEntry = errors.New("The entry size is larger than 1/1024 of cache size")
-var ErrNotFound = errors.New("Entry not found")
 
 type segment struct {
 	segId     int
@@ -92,7 +82,7 @@ func (s *segment) Set(key, value []byte, hash uint64) error {
 		// 不够空间，需要淘汰掉老数据
 		s.evacuate(entryHeaderSize + int(header.keyLen) + int(header.valCap))
 	}
-	s.addEntryIndex(bucketId, pos, s.rb.end, hash16, header.keyLen, header.valCap)
+	s.addEntryIndex(bucketId, pos, s.rb.End(), hash16, header.keyLen, header.valCap)
 	_ = s.rb.Write(headerBuf[:])
 	_ = s.rb.Write(key)
 	_ = s.rb.Write(value)

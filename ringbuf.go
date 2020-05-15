@@ -1,59 +1,58 @@
 package quickcache
 
-import (
-	"errors"
-)
-
-var ErrOutOfRange = errors.New("out of range")
-
 type ringBuf struct {
 	begin int64
 	end   int64
 	data  []byte
 }
 
-func newRingBuf(size int) *ringBuf {
+func newRingBuf(size int) ringBuf {
 	rb := ringBuf{
 		begin: 0,
 		end:   0,
 		data:  make([]byte, size),
 	}
-	return &rb
+	return rb
+}
+
+func (r *ringBuf) Begin() int64 {
+	return r.begin
+}
+
+func (r *ringBuf) End() int64 {
+	return r.end
+}
+
+func (r *ringBuf) Size() int {
+	return len(r.data)
 }
 
 func (r *ringBuf) Write(val []byte) error {
-	if len(p) > len(rb.data) {
-		err = ErrOutOfRange
-		return
-	}
-	for n < len(p) {
-		written := copy(rb.data[rb.index:], p[n:])
-		rb.end += int64(written)
-		n += written
-		rb.index += written
-		if rb.index >= len(rb.data) {
-			rb.index -= len(rb.data)
-		}
-	}
-	if int(rb.end-rb.begin) > len(rb.data) {
-		rb.begin = rb.end - int64(len(rb.data))
-	}
-	return
+	return r.WriteAt(val, r.end)
 }
 
 func (r *ringBuf) WriteAt(val []byte, offset int64) error {
-
-}
-
-
-func (r *ringBuf) Read(offset int64, limit int64) ([]byte, error) {
-
+	if len(val) > len(r.data) {
+		return ErrLargeValue
+	}
+	if offset < r.begin || offset > r.end {
+		return ErrOutOfRange
+	}
+	pos := offset % int64(len(r.data))
+	written := 0
+	for written < len(val) {
+		written := copy(r.data[pos:], val[written:])
+		r.end += int64(written)
+		if pos >= int64(len(r.data)) {
+			pos -= int64(len(r.data))
+		}
+	}
+	return nil
 }
 
 func (r *ringBuf) ReadAt(ret []byte, offset int64) error {
 
 }
-
 
 func (r *ringBuf) Evacuate(offset, length int64) {
 

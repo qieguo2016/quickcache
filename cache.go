@@ -6,11 +6,6 @@ import (
 	"github.com/cespare/xxhash"
 )
 
-const (
-	segmentCount  = 256
-	segmentOpMask = 255
-)
-
 // cache
 type Cache struct {
 	segments [segmentCount]segment
