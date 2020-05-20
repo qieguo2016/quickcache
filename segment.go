@@ -16,11 +16,8 @@ type entryIndex struct {
 	offset      int64
 	hash16      uint16
 	keyLen      uint16
+	valLen      uint32
 	valCap      uint32
-	accessTime  uint32
-	expireTime  uint32
-	accessCount uint32
-	reserved32 uint32 // 64bit，对齐cache line
 }
 
 // 长度是entryHeaderSize
@@ -56,7 +53,7 @@ func (s *segment) Set(key, value []byte, hash uint64) error {
 	pos, found := s.getIndexOfBucket(bucket, hash16, key)   // key是在rb上，读取不便，所以用hash16加速查询
 	if found {
 		entryIdx := bucket[pos]
-		_ = s.rb.ReadAt(headerBuf[:], entryIdx.offset) // 复用[]byte空间
+		_ = s.rb.ReadAt(headerBuf[:], entryIdx.offset, entryHeaderSize) // 复用[]byte空间
 		header.keyLen = uint16(len(key))
 		header.valLen = uint32(len(value))
 		if header.valCap > uint32(len(value)) { // rb中该位置有足够空间
@@ -68,7 +65,7 @@ func (s *segment) Set(key, value []byte, hash uint64) error {
 		// 不够空间则清理该段空间，将空间挤到头部或者尾部
 		header.valCap = header.valLen
 		s.delEntryIndex(bucketId, bucket, pos)
-		s.rb.Evacuate(entryIdx.offset, entryHeaderSize+int64(header.keyLen)+int64(header.valCap))
+		s.rb.Evacuate(entryIdx.offset, entryHeaderSize+int(header.keyLen)+int(header.valCap))
 	} else {
 		// new
 		header.keyLen = uint16(len(key))
@@ -77,12 +74,12 @@ func (s *segment) Set(key, value []byte, hash uint64) error {
 	}
 
 	// 从尾部插入，也需要判断是否有足够空间
-	enough := s.rb.CheckSpace(entryHeaderSize + int(header.keyLen) + int(header.valCap))
+	enough := s.rb.CheckSpace(entryHeaderSize + int(header.keyLen) + int(header.valLen))
 	if !enough {
 		// 不够空间，需要淘汰掉老数据
-		s.evacuate(entryHeaderSize + int(header.keyLen) + int(header.valCap))
+		s.evacuate(entryHeaderSize + int(header.keyLen) + int(header.valLen))
 	}
-	s.addEntryIndex(bucketId, pos, s.rb.End(), hash16, header.keyLen, header.valCap)
+	s.addEntryIndex(bucketId, pos, s.rb.End(), hash16, header.keyLen, header.valLen)
 	_ = s.rb.Write(headerBuf[:])
 	_ = s.rb.Write(key)
 	_ = s.rb.Write(value)
@@ -99,7 +96,7 @@ func (s *segment) Get(key []byte, hash uint64) (ret []byte, err error) {
 		return
 	}
 	entryIdx := bucket[pos]
-	err = s.rb.ReadAt(ret, entryIdx.offset+entryHeaderSize+int64(entryIdx.keyLen))
+	err = s.rb.ReadAt(ret, entryIdx.offset+entryHeaderSize+int64(entryIdx.keyLen), int(entryIdx.valLen))
 	return
 }
 
@@ -113,11 +110,11 @@ func (s *segment) Del(key []byte, hash uint64) error {
 	}
 	entryIdx := bucket[pos]
 	s.delEntryIndex(bucketId, bucket, pos)
-	s.rb.Evacuate(entryIdx.offset, entryHeaderSize+int64(entryIdx.keyLen)+int64(entryIdx.valCap))
+	s.rb.Evacuate(entryIdx.offset, entryHeaderSize+int(entryIdx.keyLen)+int(entryIdx.valCap))
 	return nil
 }
 
-func (s *segment) addEntryIndex(bucketId uint8, pos int, offset int64, hash16 uint16, keyLen uint16, valCap uint32) {
+func (s *segment) addEntryIndex(bucketId uint8, pos int, offset int64, hash16 uint16, keyLen uint16, valLen uint32) {
 	if s.bucketLen[bucketId] == s.bucketCap {
 		s.expand()
 	}
@@ -127,7 +124,8 @@ func (s *segment) addEntryIndex(bucketId uint8, pos int, offset int64, hash16 ui
 	bucket[pos].offset = offset
 	bucket[pos].hash16 = hash16
 	bucket[pos].keyLen = keyLen
-	bucket[pos].valCap = valCap
+	bucket[pos].valLen = valLen
+	bucket[pos].valCap = valLen
 }
 
 func (s *segment) delEntryIndex(bucketId uint8, bucket []entryIndex, pos int) {
