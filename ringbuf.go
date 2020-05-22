@@ -79,11 +79,41 @@ func (r *ringBuf) Evacuate(offset int64, length int) error {
 	if offset < r.begin || offset+int64(length) > r.end {
 		return ErrOutOfRange
 	}
-	b := make([]byte, offset-r.begin)
-	_ = r.ReadAt(b, r.begin, len(b))
-	_ = r.WriteAt(b, r.begin+int64(length))
+
+	if r.begin == offset {
+		r.begin += int64(length)
+		return nil
+	}
+
+	beginPos := int(r.begin % int64(len(r.data)))
+	evaBeginPos := int(offset % int64(len(r.data)))
+	evaEndPos := evaBeginPos + length
+	var n int
+	if evaEndPos >= len(r.data) { // 左右两侧都有
+		// 先复制左端
+		m := evaEndPos - len(r.data)
+		n = rightAlignCopy(r.data[:m], r.data[beginPos:evaBeginPos])
+		if n >= m {
+			// 再复制右端
+			n += rightAlignCopy(r.data[beginPos+length:len(r.data)], r.data[beginPos:evaBeginPos-m])
+		}
+	} else if evaBeginPos < beginPos { // 全在左侧
+		n = rightAlignCopy(r.data[:evaEndPos], r.data[:evaBeginPos])
+		n += rightAlignCopy(r.data[:n], r.data[beginPos:])
+	} else { // 全在右侧
+		n = rightAlignCopy(r.data[beginPos:evaBeginPos+length], r.data[beginPos:evaBeginPos])
+	}
 	r.begin += int64(length)
 	return nil
+}
+
+// 右对齐copy
+func rightAlignCopy(dst, src []byte) int {
+	if len(dst) > len(src) {
+		return copy(dst[len(dst)-len(src):], src)
+	} else {
+		return copy(dst, src[len(src)-len(dst):])
+	}
 }
 
 func (r *ringBuf) EqualAt(val []byte, offset int64) bool {
@@ -102,6 +132,6 @@ func (r *ringBuf) EqualAt(val []byte, offset int64) bool {
 	return equal
 }
 
-func (r *ringBuf) CheckSpace(size int) bool {
-	return len(r.data)-int(r.end-r.begin) >= size
+func (r *ringBuf) CheckSpace(size int) int {
+	return size - len(r.data) + int(r.end-r.begin)
 }

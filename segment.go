@@ -74,10 +74,10 @@ func (s *segment) Set(key, value []byte, hash uint64) error {
 	}
 
 	// 从尾部插入，也需要判断是否有足够空间
-	enough := s.rb.CheckSpace(entryHeaderSize + int(header.keyLen) + int(header.valLen))
-	if !enough {
+	needSpace := s.rb.CheckSpace(entryHeaderSize + int(header.keyLen) + int(header.valLen))
+	if needSpace > 0 {
 		// 不够空间，需要淘汰掉老数据
-		s.evacuate(entryHeaderSize + int(header.keyLen) + int(header.valLen))
+		s.evacuate(needSpace)
 	}
 	s.addEntryIndex(bucketId, pos, s.rb.End(), hash16, header.keyLen, header.valLen)
 	_ = s.rb.Write(headerBuf[:])
