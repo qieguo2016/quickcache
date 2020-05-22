@@ -32,6 +32,10 @@ type entryHeader struct {
 func newSegment(size, i int) segment {
 	return segment{
 		segId: i,
+		rb: newRingBuf(size),
+		bucketLen: [bucketCount]int32{},
+		bucketCap: 1,
+		buckets: make([]entryIndex, bucketCount),
 	}
 }
 
@@ -40,7 +44,7 @@ func (s *segment) Set(key, value []byte, hash uint64) error {
 	if len(key) > 65535 {
 		return ErrLargeKey
 	}
-	maxKeyValLen := len(s.rb.data)/4 - entryHeaderSize
+	maxKeyValLen := s.rb.Size()/4 - entryHeaderSize
 	if len(key)+len(value) > maxKeyValLen {
 		return ErrLargeEntry
 	}
@@ -96,6 +100,7 @@ func (s *segment) Get(key []byte, hash uint64) (ret []byte, err error) {
 		return
 	}
 	entryIdx := bucket[pos]
+	ret = make([]byte, int(entryIdx.valLen))
 	err = s.rb.ReadAt(ret, entryIdx.offset+entryHeaderSize+int64(entryIdx.keyLen), int(entryIdx.valLen))
 	return
 }
