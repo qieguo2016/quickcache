@@ -10,13 +10,16 @@ func TestRingBuf(t *testing.T) {
 	rb.Write([]byte("qrstuvw"))
 	t.Log(string(rb.data))
 	rb.Evacuate(9, 3)
+	if string(rb.data) != "qrstuvwhijhimnop" {
+		t.Fatalf("expect %v, got %v", "qrstuvwhijhimnop", string(rb.data))
+	}
 	t.Log(string(rb.data))
 	t.Log(rb.begin)
 
 	a := make([]byte, 5)
 	rb.ReadAt(a, rb.begin, 5)
 	if string(a) != string(rb.data[10:15]) {
-		t.Fatalf("expect %v, vgot %v", string(rb.data[10:15]), string(a))
+		t.Fatalf("expect %v, got %v", string(rb.data[10:15]), string(a))
 	}
 
 	b := []byte("abcdefg")

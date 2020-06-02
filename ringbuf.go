@@ -7,6 +7,7 @@ import (
 type ringBuf struct {
 	begin int64
 	end   int64
+	size  int
 	data  []byte
 }
 
@@ -14,6 +15,7 @@ func newRingBuf(size int) ringBuf {
 	rb := ringBuf{
 		begin: 0,
 		end:   0,
+		size:  size,
 		data:  make([]byte, size),
 	}
 	return rb
@@ -28,7 +30,7 @@ func (r *ringBuf) End() int64 {
 }
 
 func (r *ringBuf) Size() int {
-	return len(r.data)
+	return r.size
 }
 
 func (r *ringBuf) Write(val []byte) error {
@@ -42,7 +44,7 @@ func (r *ringBuf) WriteAt(val []byte, offset int64) error {
 	if offset < r.begin || offset > r.end {
 		return ErrOutOfRange
 	}
-	pos := offset % int64(len(r.data))
+	pos := offset & int64(r.size-1)
 	written := 0
 	for written < len(val) {
 		written = copy(r.data[pos:], val[written:])
@@ -62,7 +64,7 @@ func (r *ringBuf) ReadAt(ret []byte, offset int64, length int) error {
 	if offset < r.begin || offset > r.end {
 		return ErrOutOfRange
 	}
-	pos := int(offset % int64(len(r.data)))
+	pos := int(offset & int64(r.size-1))
 	if pos+length < len(r.data) {
 		copy(ret, r.data[pos:pos+length])
 		return nil
@@ -85,8 +87,8 @@ func (r *ringBuf) Evacuate(offset int64, length int) error {
 		return nil
 	}
 
-	beginPos := int(r.begin % int64(len(r.data)))
-	evaBeginPos := int(offset % int64(len(r.data)))
+	beginPos := int(r.begin & int64(r.size-1))
+	evaBeginPos := int(offset & int64(r.size-1))
 	evaEndPos := evaBeginPos + length
 	var n int
 	if evaEndPos >= len(r.data) { // 左右两侧都有
@@ -107,24 +109,15 @@ func (r *ringBuf) Evacuate(offset int64, length int) error {
 	return nil
 }
 
-// 右对齐copy
-func rightAlignCopy(dst, src []byte) int {
-	if len(dst) > len(src) {
-		return copy(dst[len(dst)-len(src):], src)
-	} else {
-		return copy(dst, src[len(src)-len(dst):])
-	}
-}
-
 func (r *ringBuf) EqualAt(val []byte, offset int64) bool {
 	if offset+int64(len(val)) > r.end || offset < r.begin {
 		return false
 	}
-	pos := int(offset % int64(len(r.data)))
+	pos := int(offset & int64(r.size-1))
 	if pos+len(val) < len(r.data) {
 		return bytes.Equal(val, r.data[pos:pos+len(val)])
 	}
-	beginPos := int(r.begin % int64(len(r.data)))
+	beginPos := int(r.begin & int64(r.size-1))
 	equal := bytes.Equal(val[:len(r.data)-beginPos], r.data[pos:])
 	if equal {
 		equal = bytes.Equal(val[len(r.data)-beginPos:], r.data[:len(val)-len(r.data)+beginPos])

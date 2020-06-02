@@ -1,9 +1,8 @@
 package quickcache
 
 import (
+	"fmt"
 	"sync"
-
-	"github.com/cespare/xxhash"
 )
 
 // cache
@@ -12,17 +11,16 @@ type Cache struct {
 	locks    [segmentCount]sync.Mutex
 }
 
-// hash分布：|31-16用来加速查询|15-8用来定位bucket|7-0用来定位segment|
-func hashFunc(data []byte) uint64 {
-	return xxhash.Sum64(data)
-}
-
-func NewCache(size int) *Cache {
+func NewCache(mbSize int) (*Cache, error) {
+	if !isPowerOfTwo(mbSize) {
+		return nil, fmt.Errorf("size must be power of two")
+	}
 	cache := new(Cache)
+	size := convertMBToBytes(mbSize)
 	for i := 0; i < segmentCount; i++ {
 		cache.segments[i] = newSegment(size/segmentCount, i)
 	}
-	return cache
+	return cache, nil
 }
 
 func (c *Cache) Get(key []byte) ([]byte, error) {
